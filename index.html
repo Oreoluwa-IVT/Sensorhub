@@ -4,104 +4,443 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sensor Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-  :root{--bg:#f6f7f9;--card:#fff;--text:#14181f;--mute:#6b7280;--line:#e5e7eb;--ok:#16a34a;--bad:#dc2626}
-  @media(prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#171b22;--text:#e8eaee;--mute:#8b93a1;--line:#262c36}}
+  :root{
+    --bg:#f4f8fd; --glow1:#dbeafe; --glow2:#e0e7ff;
+    --card:rgba(255,255,255,.78); --stroke:rgba(255,255,255,.95);
+    --text:#0f1a2b; --mute:#6b7a90; --line:#e4ebf4; --soft:#f1f5fb;
+    --accent:#3b82f6; --ok:#16a34a; --bad:#dc2626;
+    --ink:#0f1a2b; --onink:#ffffff;
+    --shadow:0 1px 2px rgba(16,24,40,.04),0 14px 36px rgba(37,84,160,.08);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0a0f16; --glow1:#12264a; --glow2:#1b1b45;
+      --card:rgba(20,27,38,.72); --stroke:rgba(255,255,255,.06);
+      --text:#e9eef6; --mute:#8794a8; --line:#222d3d; --soft:#18202c;
+      --ink:#e9eef6; --onink:#0a0f16;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 14px 36px rgba(0,0,0,.35);
+    }
+  }
   *{box-sizing:border-box}
-  body{margin:0 auto;max-width:1000px;padding:24px;font-family:system-ui,sans-serif;background:var(--bg);color:var(--text)}
-  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
-  h1{font-size:20px;margin:0;font-weight:600}
-  #state{font-size:13px;color:var(--mute)}
-  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mute);margin-right:6px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
-  .label{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
-  .val{font-size:26px;font-weight:600;margin-top:6px}
-  .unit{font-size:13px;color:var(--mute);font-weight:400}
-  .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
-  canvas{max-height:240px}
+  body{
+    margin:0; min-height:100vh; color:var(--text);
+    font-family:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:
+      radial-gradient(900px 500px at 8% -5%, var(--glow1), transparent 60%),
+      radial-gradient(800px 500px at 100% 10%, var(--glow2), transparent 55%),
+      var(--bg);
+    background-attachment:fixed;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 48px}
+
+  /* top bar */
+  .top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+  .brand{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:500;letter-spacing:-.01em}
+  .brand b{font-weight:700}
+  .tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .seg{display:flex;align-items:center;gap:2px;padding:4px;border-radius:12px;background:var(--card);border:1px solid var(--stroke);box-shadow:var(--shadow)}
+  .segl{font-size:11px;color:var(--mute);padding:0 8px;text-transform:uppercase;letter-spacing:.06em}
+  .seg button{border:0;background:transparent;color:var(--mute);font:500 13px "Inter",sans-serif;padding:6px 12px;border-radius:9px;cursor:pointer}
+  .seg button.on{background:var(--ink);color:var(--onink)}
+  .pill{display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:12px;background:var(--card);border:1px solid var(--stroke);box-shadow:var(--shadow);font-size:13px;font-weight:500}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--mute);display:inline-block}
+  .pill.live .dot{background:var(--ok);box-shadow:0 0 0 4px rgba(22,163,74,.18)}
+  .pill.off .dot{background:var(--bad);box-shadow:0 0 0 4px rgba(220,38,38,.16)}
+
+  /* cards and grid */
+  .card{background:var(--card);border:1px solid var(--stroke);border-radius:22px;box-shadow:var(--shadow);padding:22px;
+        backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+  .row{display:grid;gap:16px;margin-bottom:16px}
+  .r1{grid-template-columns:1fr 330px}
+  .r2{grid-template-columns:2fr 1fr}
+  .r3{grid-template-columns:repeat(3,1fr)}
+  .ch{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px}
+  .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute);font-weight:500}
+  h2{font-size:18px;font-weight:600;margin:4px 0 0;letter-spacing:-.01em}
+  .clock{text-align:right;font-size:12px;color:var(--mute);display:flex;flex-direction:column;gap:2px}
+  .clock b{font-size:18px;color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+
+  /* hero */
+  .dial-row{display:grid;grid-template-columns:1fr minmax(240px,300px) 1fr;gap:18px;align-items:center}
+  .side{display:flex;flex-direction:column;gap:12px}
+  .chip{display:flex;align-items:center;gap:12px;background:var(--soft);border-radius:16px;padding:12px 14px}
+  .ico{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--card);color:var(--accent);flex:none;box-shadow:0 1px 2px rgba(16,24,40,.06)}
+  .ico svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .chip small{display:block;font-size:12px;color:var(--mute)}
+  .chip .v{font-size:19px;font-weight:600;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+  .chip .v em{font-style:normal;font-size:12px;color:var(--mute);font-weight:500;margin-left:3px}
+  .dial{position:relative;aspect-ratio:1}
+  .dial svg{width:100%;height:100%;display:block}
+  .dial-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none}
+  .deg{font-size:clamp(40px,5vw,54px);font-weight:600;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums}
+  .deg sup{font-size:.4em;color:var(--mute);font-weight:500;margin-left:2px;vertical-align:top;position:relative;top:.35em}
+  .dir{margin-top:8px;font-size:13px;color:var(--mute);font-weight:500}
+
+  /* overview panel */
+  .badge{font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:rgba(22,163,74,.12);color:var(--ok)}
+  .badge.off{background:rgba(220,38,38,.12);color:var(--bad)}
+  .rw{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .rw span:first-child{color:var(--mute)}
+  .rw span:last-child{font-weight:600;font-variant-numeric:tabular-nums}
+  .btns{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+  .btn{display:block;width:100%;text-align:center;text-decoration:none;padding:12px;border-radius:12px;font:600 14px "Inter",sans-serif;
+       border:1px solid var(--line);background:transparent;color:var(--text);cursor:pointer}
+  .btn.pri{background:var(--ink);color:var(--onink);border-color:var(--ink)}
+
+  /* charts */
+  .chartbox{position:relative;height:230px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mute)}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .big{font-size:30px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+  .big em{font-style:normal;font-size:13px;color:var(--mute);font-weight:500;margin-left:4px}
+
+  /* calibration */
+  .cal{display:flex;flex-direction:column;gap:16px;margin-top:6px}
+  .cal .l{display:flex;justify-content:space-between;font-size:13px;margin-bottom:7px}
+  .cal .l span:first-child{color:var(--mute)}
+  .cal .l span:last-child{font-weight:600}
+  .bar{height:8px;border-radius:99px;background:var(--soft);overflow:hidden}
+  .bar i{display:block;height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,#93c5fd,#3b82f6);transition:width .6s}
+  .note{font-size:12px;color:var(--mute);margin-top:18px}
+
+  /* tilt */
+  .level{position:relative;width:min(100%,190px);aspect-ratio:1;margin:6px auto 0;border-radius:50%;border:1px solid var(--line);
+         background:
+           linear-gradient(var(--line),var(--line)) center/1px 100% no-repeat,
+           linear-gradient(var(--line),var(--line)) center/100% 1px no-repeat,
+           radial-gradient(circle,var(--soft),transparent 72%)}
+  .level::before{content:"";position:absolute;inset:22%;border:1px solid var(--line);border-radius:50%}
+  .bubble{position:absolute;left:50%;top:50%;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;
+          background:linear-gradient(135deg,#60a5fa,#3b82f6);box-shadow:0 8px 18px rgba(59,130,246,.45);transition:transform .5s cubic-bezier(.2,.8,.2,1)}
+  .tiltTxt{text-align:center;font-size:13px;color:var(--mute);margin-top:16px;font-variant-numeric:tabular-nums}
+
+  .foot{text-align:center;font-size:12px;color:var(--mute);margin-top:8px}
+
+  @media (max-width:980px){
+    .r1,.r2,.r3{grid-template-columns:1fr}
+    .dial-row{grid-template-columns:1fr}
+    .dial{order:-1;max-width:300px;margin:0 auto;width:100%}
+    .side{display:grid;grid-template-columns:1fr 1fr}
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>Sensor Hub</h1>
-  <div id="state"><span class="dot" id="dot"></span><span id="stateText">Loading...</span></div>
-</header>
+<div class="wrap">
 
-<div class="grid">
-  <div class="card"><div class="label">Temperature</div><div class="val"><span id="temp">--</span> <span class="unit">C</span></div></div>
-  <div class="card"><div class="label">Humidity</div><div class="val"><span id="hum">--</span> <span class="unit">%</span></div></div>
-  <div class="card"><div class="label">Sink Value</div><div class="val"><span id="dist">--</span> <span class="unit">mm</span></div></div>
-  <div class="card"><div class="label">Compass</div><div class="val"><span id="head">--</span> <span class="unit">deg</span></div><div class="unit" id="dir"></div></div>
-  <div class="card"><div class="label">IMU.x / IMU.y</div><div class="val"><span id="imux">--</span> <span class="unit">/</span> <span id="imuy">--</span></div></div>
-  <div class="card"><div class="label">Acc.x / Acc.y</div><div class="val"><span id="accx">--</span> <span class="unit">/</span> <span id="accy">--</span></div><div class="unit">m/s2</div></div>
-  <div class="card"><div class="label">Calibration</div><div class="val" id="cal" style="font-size:20px">--</div><div class="unit">sys:gyro:acc:mag</div></div>
-</div>
+  <header class="top">
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs>
+        <rect width="28" height="28" rx="8" fill="url(#lg)"/>
+        <path d="M6 15h4l2-6 4 12 2-6h4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Sensor<b>Hub</b></span>
+    </div>
+    <div class="tools">
+      <div class="seg" id="range">
+        <span class="segl">Readings</span>
+        <button data-n="30">30</button><button data-n="60" class="on">60</button><button data-n="120">120</button>
+      </div>
+      <div class="pill" id="pill"><i class="dot"></i><span id="pillText">Connecting...</span></div>
+    </div>
+  </header>
 
-<div class="charts">
-  <div class="card"><canvas id="c1"></canvas></div>
-  <div class="card"><canvas id="c2"></canvas></div>
-  <div class="card"><canvas id="c3"></canvas></div>
+  <div class="row r1">
+    <section class="card">
+      <div class="ch">
+        <div><div class="eyebrow">Live telemetry</div><h2>Device overview</h2></div>
+        <div class="clock"><b id="lastTime">--:--:--</b><span id="lastDate">&nbsp;</span></div>
+      </div>
+
+      <div class="dial-row">
+        <div class="side">
+          <div class="chip"><div class="ico"><svg viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg></div>
+            <div><small>Temperature</small><div class="v"><span id="tempV">--</span><em>C</em></div></div></div>
+          <div class="chip"><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg></div>
+            <div><small>Humidity</small><div class="v"><span id="humV">--</span><em>%</em></div></div></div>
+        </div>
+
+        <div class="dial">
+          <svg viewBox="0 0 300 300" aria-hidden="true">
+            <defs>
+              <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#a5b4fc"/></linearGradient>
+              <radialGradient id="glow"><stop offset="0" stop-color="#3b82f6" stop-opacity=".16"/><stop offset="1" stop-color="#3b82f6" stop-opacity="0"/></radialGradient>
+            </defs>
+            <circle cx="150" cy="150" r="146" fill="url(#glow)"/>
+            <circle cx="150" cy="150" r="136" fill="none" stroke="var(--line)" stroke-width="2"/>
+            <circle cx="150" cy="150" r="92" fill="none" stroke="url(#ring)" stroke-width="3" stroke-dasharray="2 7" stroke-linecap="round" opacity=".7"/>
+            <g id="ticks"></g>
+            <g font-size="13" font-weight="600" text-anchor="middle" dominant-baseline="central" fill="var(--mute)">
+              <text x="150" y="44" fill="var(--accent)">N</text>
+              <text x="256" y="150">E</text>
+              <text x="150" y="256">S</text>
+              <text x="44" y="150">W</text>
+            </g>
+            <g id="needle" style="transform-origin:150px 150px;transition:transform .9s cubic-bezier(.2,.8,.2,1)">
+              <line x1="150" y1="78" x2="150" y2="64" stroke="url(#ring)" stroke-width="3" stroke-linecap="round"/>
+              <circle cx="150" cy="58" r="12" fill="var(--accent)" opacity=".18"/>
+              <circle cx="150" cy="58" r="6.5" fill="var(--accent)"/>
+            </g>
+          </svg>
+          <div class="dial-center">
+            <div class="deg"><span id="deg">--</span><sup>&deg;</sup></div>
+            <div class="dir" id="dir">Compass</div>
+          </div>
+        </div>
+
+        <div class="side">
+          <div class="chip"><div class="ico"><svg viewBox="0 0 24 24"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></svg></div>
+            <div><small>Sink value</small><div class="v"><span id="distV">--</span><em>mm</em></div></div></div>
+          <div class="chip"><div class="ico"><svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+            <div><small>Calibration</small><div class="v"><span id="calV">--</span></div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="card">
+      <div class="ch"><div><div class="eyebrow">Status</div><h2>Overview</h2></div><span class="badge off" id="badge">Waiting</span></div>
+      <div class="rw"><span>Temperature</span><span id="ovT">--</span></div>
+      <div class="rw"><span>Humidity</span><span id="ovH">--</span></div>
+      <div class="rw"><span>Sink value</span><span id="ovD">--</span></div>
+      <div class="rw"><span>IMU.x / IMU.y</span><span id="ovI">--</span></div>
+      <div class="rw"><span>Acc.x / Acc.y</span><span id="ovA">--</span></div>
+      <div class="rw"><span>Entry ID</span><span id="ovE">--</span></div>
+      <div class="btns">
+        <button class="btn pri" id="csv">Export CSV</button>
+        <a class="btn" href="/api/data" target="_blank" rel="noopener">View raw JSON</a>
+      </div>
+    </aside>
+  </div>
+
+  <div class="row r2">
+    <section class="card">
+      <div class="ch">
+        <div><div class="eyebrow">Environment</div><h2>Temperature and humidity</h2></div>
+        <div class="legend"><span><i style="background:#ef6c4a"></i>Temperature (C)</span><span><i style="background:#3b82f6"></i>Humidity (%)</span></div>
+      </div>
+      <div class="chartbox"><canvas id="c1"></canvas></div>
+    </section>
+
+    <section class="card">
+      <div class="ch"><div><div class="eyebrow">IMU</div><h2>Calibration</h2></div></div>
+      <div class="cal">
+        <div><div class="l"><span>System</span><span id="v0">--</span></div><div class="bar"><i id="b0"></i></div></div>
+        <div><div class="l"><span>Gyroscope</span><span id="v1">--</span></div><div class="bar"><i id="b1"></i></div></div>
+        <div><div class="l"><span>Accelerometer</span><span id="v2">--</span></div><div class="bar"><i id="b2"></i></div></div>
+        <div><div class="l"><span>Magnetometer</span><span id="v3">--</span></div><div class="bar"><i id="b3"></i></div></div>
+      </div>
+      <div class="note">3 of 3 means fully calibrated.</div>
+    </section>
+  </div>
+
+  <div class="row r3">
+    <section class="card">
+      <div class="ch"><div><div class="eyebrow">Motion</div><h2>IMU and acceleration</h2></div></div>
+      <div class="legend" style="margin-bottom:10px">
+        <span><i style="background:#6366f1"></i>IMU.x</span><span><i style="background:#38bdf8"></i>IMU.y</span>
+        <span><i style="background:#14b8a6"></i>Acc.x</span><span><i style="background:#f59e0b"></i>Acc.y</span>
+      </div>
+      <div class="chartbox" style="height:200px"><canvas id="c2"></canvas></div>
+    </section>
+
+    <section class="card">
+      <div class="ch"><div><div class="eyebrow">Orientation</div><h2>Tilt</h2></div></div>
+      <div class="level"><div class="bubble" id="bubble"></div></div>
+      <div class="tiltTxt" id="tiltTxt">x -- / y --</div>
+    </section>
+
+    <section class="card">
+      <div class="ch">
+        <div><div class="eyebrow">Distance</div><h2>Sink value</h2></div>
+        <div class="big"><span id="distBig">--</span><em>mm</em></div>
+      </div>
+      <div class="chartbox" style="height:200px"><canvas id="c3"></canvas></div>
+    </section>
+  </div>
+
+  <div class="foot">Updates every 16 s | Data via ThingSpeak</div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
-const fmt = (v, d) => (v == null || v === "") ? "--" : Number(v).toFixed(d);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmt = (v, d) => (v == null || isNaN(v)) ? "--" : Number(v).toFixed(d);
+const DIRS = ["North","Northeast","East","Southeast","South","Southwest","West","Northwest"];
 
-function mkChart(id, sets) {
+let N = 60, feeds = [], curAngle = 0;
+
+/* compass ticks */
+(function () {
+  const g = $("ticks"), ns = "http://www.w3.org/2000/svg";
+  for (let i = 0; i < 72; i++) {
+    const a = i * 5 * Math.PI / 180, major = i % 9 === 0;
+    const r1 = major ? 118 : 124, r2 = 130;
+    const l = document.createElementNS(ns, "line");
+    l.setAttribute("x1", 150 + r1 * Math.sin(a)); l.setAttribute("y1", 150 - r1 * Math.cos(a));
+    l.setAttribute("x2", 150 + r2 * Math.sin(a)); l.setAttribute("y2", 150 - r2 * Math.cos(a));
+    l.setAttribute("stroke", "var(--mute)");
+    l.setAttribute("stroke-width", major ? 2 : 1);
+    l.setAttribute("opacity", major ? .8 : .3);
+    l.setAttribute("stroke-linecap", "round");
+    g.appendChild(l);
+  }
+})();
+
+/* charts */
+const MUTE = css("--mute"), LINE = css("--line");
+const fillGrad = color => c => {
+  const a = c.chart.chartArea;
+  if (!a) return color + "00";
+  const g = c.chart.ctx.createLinearGradient(0, a.top, 0, a.bottom);
+  g.addColorStop(0, color + "38"); g.addColorStop(1, color + "00");
+  return g;
+};
+const axis = (pos, grid) => ({
+  position: pos,
+  grid: { color: LINE, drawOnChartArea: grid },
+  border: { display: false },
+  ticks: { color: MUTE, font: { size: 11 }, maxTicksLimit: 5 }
+});
+function mk(id, sets, scales) {
   return new Chart($(id), {
     type: "line",
-    data: { labels: [], datasets: sets.map(s => ({ label: s[0], borderColor: s[1], data: [], pointRadius: 0, tension: 0.3, borderWidth: 2 })) },
-    options: { animation: false, scales: { x: { ticks: { maxTicksLimit: 6 } } }, plugins: { legend: { position: "bottom" } } }
+    data: {
+      labels: [],
+      datasets: sets.map(s => ({
+        label: s.label, data: [], borderColor: s.color, borderWidth: 2, tension: .4,
+        pointRadius: 0, pointHoverRadius: 4, fill: !!s.fill,
+        backgroundColor: fillGrad(s.color), yAxisID: s.axis || "y"
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor: css("--ink"), titleColor: css("--onink"), bodyColor: css("--onink"), padding: 10, cornerRadius: 10, boxPadding: 4 }
+      },
+      scales: Object.assign({
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: MUTE, font: { size: 11 }, maxTicksLimit: 5 } }
+      }, scales)
+    }
   });
 }
-const c1 = mkChart("c1", [["Temperature (C)", "#ef4444"], ["Humidity (%)", "#3b82f6"]]);
-const c2 = mkChart("c2", [["IMU.x", "#8b5cf6"], ["IMU.y", "#ec4899"], ["Acc.x", "#f59e0b"], ["Acc.y", "#10b981"]]);
-const c3 = mkChart("c3", [["Sink Value (mm)", "#06b6d4"]]);
+const c1 = mk("c1",
+  [{ label: "Temperature (C)", color: "#ef6c4a", fill: true, axis: "y" },
+   { label: "Humidity (%)", color: "#3b82f6", fill: true, axis: "y1" }],
+  { y: axis("left", true), y1: axis("right", false) });
+const c2 = mk("c2",
+  [{ label: "IMU.x", color: "#6366f1", axis: "y" }, { label: "IMU.y", color: "#38bdf8", axis: "y" },
+   { label: "Acc.x", color: "#14b8a6", axis: "y1" }, { label: "Acc.y", color: "#f59e0b", axis: "y1" }],
+  { y: axis("left", true), y1: axis("right", false) });
+const c3 = mk("c3", [{ label: "Sink value (mm)", color: "#0ea5e9", fill: true }], { y: axis("left", true) });
 
-function fill(chart, labels, feeds, fields) {
+function fill(chart, labels, list, fields) {
   chart.data.labels = labels;
   fields.forEach((n, i) => {
-    chart.data.datasets[i].data = feeds.map(x => x["field" + n] == null ? null : Number(x["field" + n]));
+    chart.data.datasets[i].data = list.map(x => x["field" + n] == null ? null : Number(x["field" + n]));
   });
-  chart.update();
+  chart.update("none");
 }
 
+/* helpers */
+function setDial(h) {
+  if (h == null) return;
+  const delta = ((h - curAngle + 540) % 360) - 180;   // shortest way round
+  curAngle += delta;
+  $("needle").style.transform = "rotate(" + curAngle + "deg)";
+}
+function setPill(live, text) {
+  $("pill").className = "pill " + (live ? "live" : "off");
+  $("pillText").textContent = text;
+  $("badge").className = "badge" + (live ? "" : " off");
+  $("badge").textContent = live ? "Live" : "Offline";
+}
+const clamp = (v, m) => Math.max(-m, Math.min(m, v));
+
+/* main loop */
 async function load() {
   try {
-    const r = await fetch("/api/data?results=60");
+    const r = await fetch("/api/data?results=" + N);
     const d = await r.json();
     if (!d.feeds || !d.feeds.length) throw new Error(d.error || "No data yet");
-    const f = d.feeds, last = f[f.length - 1];
+    feeds = d.feeds;
+    const L = feeds[feeds.length - 1];
+    const v = k => L["field" + k] == null ? null : Number(L["field" + k]);
+    const t = v(1), h = v(2), dist = v(3), ix = v(4), iy = v(5), hd = v(6), ax = v(7), ay = v(8);
 
-    $("temp").textContent = fmt(last.field1, 1);
-    $("hum").textContent  = fmt(last.field2, 1);
-    $("dist").textContent = fmt(last.field3, 0);
-    $("imux").textContent = fmt(last.field4, 1);
-    $("imuy").textContent = fmt(last.field5, 1);
-    $("head").textContent = fmt(last.field6, 0);
-    $("accx").textContent = fmt(last.field7, 2);
-    $("accy").textContent = fmt(last.field8, 2);
+    $("tempV").textContent = fmt(t, 1);
+    $("humV").textContent = fmt(h, 1);
+    $("distV").textContent = dist == null ? "--" : fmt(dist, 0);
+    $("deg").textContent = fmt(hd, 0);
+    setDial(hd);
 
-    const parts = (last.status || "").split(" CAL ");
-    $("dir").textContent = parts[0] || "";
-    $("cal").textContent = parts[1] || "--";
+    const parts = (L.status || "").split(" CAL ");
+    const dir = parts[0] || (hd != null ? DIRS[Math.round(hd / 45) % 8] : "");
+    $("dir").textContent = dir || "Compass";
+    const cal = (parts[1] || "").split(":").map(Number);
+    $("calV").textContent = parts[1] || "--";
+    for (let i = 0; i < 4; i++) {
+      const c = isNaN(cal[i]) ? 0 : cal[i];
+      $("b" + i).style.width = (c / 3 * 100) + "%";
+      $("v" + i).textContent = isNaN(cal[i]) ? "--" : c + " / 3";
+    }
 
-    const labels = f.map(x => new Date(x.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
-    fill(c1, labels, f, [1, 2]);
-    fill(c2, labels, f, [4, 5, 7, 8]);
-    fill(c3, labels, f, [3]);
+    $("ovT").textContent = fmt(t, 1) + " C";
+    $("ovH").textContent = fmt(h, 1) + " %";
+    $("ovD").textContent = dist == null ? "Out of range" : fmt(dist, 0) + " mm";
+    $("ovI").textContent = fmt(ix, 1) + " / " + fmt(iy, 1);
+    $("ovA").textContent = fmt(ax, 2) + " / " + fmt(ay, 2);
+    $("ovE").textContent = L.entry_id;
+    $("distBig").textContent = dist == null ? "--" : fmt(dist, 0);
 
-    const age = (Date.now() - new Date(last.created_at)) / 1000;
-    const online = age < 60;
-    $("dot").style.background = online ? "var(--ok)" : "var(--bad)";
-    $("stateText").textContent = (online ? "Online" : "Offline") + " | last update " + Math.round(age) + " s ago";
+    if (ix != null && iy != null) {
+      $("bubble").style.transform = "translate(" + clamp(iy * 4, 62) + "px," + clamp(ix * 4, 62) + "px)";
+      $("tiltTxt").textContent = "x " + fmt(ix, 1) + "\u00b0  /  y " + fmt(iy, 1) + "\u00b0";
+    }
+
+    const when = new Date(L.created_at);
+    $("lastTime").textContent = when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    $("lastDate").textContent = when.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+
+    const labels = feeds.map(x => new Date(x.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+    fill(c1, labels, feeds, [1, 2]);
+    fill(c2, labels, feeds, [4, 5, 7, 8]);
+    fill(c3, labels, feeds, [3]);
+
+    const age = Math.round((Date.now() - when) / 1000);
+    setPill(age < 60, (age < 60 ? "Live" : "Offline") + " | " + age + " s ago");
   } catch (e) {
-    $("dot").style.background = "var(--bad)";
-    $("stateText").textContent = "Error: " + e.message;
+    setPill(false, "Error: " + e.message);
   }
 }
+
+/* controls */
+$("range").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  document.querySelectorAll("#range button").forEach(x => x.classList.remove("on"));
+  b.classList.add("on");
+  N = parseInt(b.dataset.n, 10);
+  load();
+});
+$("csv").addEventListener("click", () => {
+  if (!feeds.length) return;
+  const rows = [["time","entry_id","temperature_c","humidity_pct","sink_value_mm","imu_x","imu_y","compass_deg","acc_x","acc_y","status"]];
+  feeds.forEach(x => rows.push([x.created_at, x.entry_id, x.field1, x.field2, x.field3, x.field4, x.field5, x.field6, x.field7, x.field8, x.status || ""]
+    .map(c => c == null ? "" : '"' + String(c).replace(/"/g, '""') + '"')));
+  const blob = new Blob([rows.map(r => r.join(",")).join("\n")], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "sensor-hub.csv"; a.click();
+  URL.revokeObjectURL(a.href);
+});
+
 load();
 setInterval(load, 16000);
 </script>
