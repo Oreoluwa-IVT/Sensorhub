@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sensor Hub</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{--bg:#f6f7f9;--card:#fff;--text:#14181f;--mute:#6b7280;--line:#e5e7eb;--ok:#16a34a;--bad:#dc2626}
+  @media(prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#171b22;--text:#e8eaee;--mute:#8b93a1;--line:#262c36}}
+  *{box-sizing:border-box}
+  body{margin:0 auto;max-width:1000px;padding:24px;font-family:system-ui,sans-serif;background:var(--bg);color:var(--text)}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+  h1{font-size:20px;margin:0;font-weight:600}
+  #state{font-size:13px;color:var(--mute)}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mute);margin-right:6px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .label{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+  .val{font-size:26px;font-weight:600;margin-top:6px}
+  .unit{font-size:13px;color:var(--mute);font-weight:400}
+  .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+  canvas{max-height:240px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Sensor Hub</h1>
+  <div id="state"><span class="dot" id="dot"></span><span id="stateText">Loading...</span></div>
+</header>
+
+<div class="grid">
+  <div class="card"><div class="label">Temperature</div><div class="val"><span id="temp">--</span> <span class="unit">C</span></div></div>
+  <div class="card"><div class="label">Humidity</div><div class="val"><span id="hum">--</span> <span class="unit">%</span></div></div>
+  <div class="card"><div class="label">Sink Value</div><div class="val"><span id="dist">--</span> <span class="unit">mm</span></div></div>
+  <div class="card"><div class="label">Compass</div><div class="val"><span id="head">--</span> <span class="unit">deg</span></div><div class="unit" id="dir"></div></div>
+  <div class="card"><div class="label">IMU.x / IMU.y</div><div class="val"><span id="imux">--</span> <span class="unit">/</span> <span id="imuy">--</span></div></div>
+  <div class="card"><div class="label">Acc.x / Acc.y</div><div class="val"><span id="accx">--</span> <span class="unit">/</span> <span id="accy">--</span></div><div class="unit">m/s2</div></div>
+  <div class="card"><div class="label">Calibration</div><div class="val" id="cal" style="font-size:20px">--</div><div class="unit">sys:gyro:acc:mag</div></div>
+</div>
+
+<div class="charts">
+  <div class="card"><canvas id="c1"></canvas></div>
+  <div class="card"><canvas id="c2"></canvas></div>
+  <div class="card"><canvas id="c3"></canvas></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = (v, d) => (v == null || v === "") ? "--" : Number(v).toFixed(d);
+
+function mkChart(id, sets) {
+  return new Chart($(id), {
+    type: "line",
+    data: { labels: [], datasets: sets.map(s => ({ label: s[0], borderColor: s[1], data: [], pointRadius: 0, tension: 0.3, borderWidth: 2 })) },
+    options: { animation: false, scales: { x: { ticks: { maxTicksLimit: 6 } } }, plugins: { legend: { position: "bottom" } } }
+  });
+}
+const c1 = mkChart("c1", [["Temperature (C)", "#ef4444"], ["Humidity (%)", "#3b82f6"]]);
+const c2 = mkChart("c2", [["IMU.x", "#8b5cf6"], ["IMU.y", "#ec4899"], ["Acc.x", "#f59e0b"], ["Acc.y", "#10b981"]]);
+const c3 = mkChart("c3", [["Sink Value (mm)", "#06b6d4"]]);
+
+function fill(chart, labels, feeds, fields) {
+  chart.data.labels = labels;
+  fields.forEach((n, i) => {
+    chart.data.datasets[i].data = feeds.map(x => x["field" + n] == null ? null : Number(x["field" + n]));
+  });
+  chart.update();
+}
+
+async function load() {
+  try {
+    const r = await fetch("/api/data?results=60");
+    const d = await r.json();
+    if (!d.feeds || !d.feeds.length) throw new Error(d.error || "No data yet");
+    const f = d.feeds, last = f[f.length - 1];
+
+    $("temp").textContent = fmt(last.field1, 1);
+    $("hum").textContent  = fmt(last.field2, 1);
+    $("dist").textContent = fmt(last.field3, 0);
+    $("imux").textContent = fmt(last.field4, 1);
+    $("imuy").textContent = fmt(last.field5, 1);
+    $("head").textContent = fmt(last.field6, 0);
+    $("accx").textContent = fmt(last.field7, 2);
+    $("accy").textContent = fmt(last.field8, 2);
+
+    const parts = (last.status || "").split(" CAL ");
+    $("dir").textContent = parts[0] || "";
+    $("cal").textContent = parts[1] || "--";
+
+    const labels = f.map(x => new Date(x.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    fill(c1, labels, f, [1, 2]);
+    fill(c2, labels, f, [4, 5, 7, 8]);
+    fill(c3, labels, f, [3]);
+
+    const age = (Date.now() - new Date(last.created_at)) / 1000;
+    const online = age < 60;
+    $("dot").style.background = online ? "var(--ok)" : "var(--bad)";
+    $("stateText").textContent = (online ? "Online" : "Offline") + " | last update " + Math.round(age) + " s ago";
+  } catch (e) {
+    $("dot").style.background = "var(--bad)";
+    $("stateText").textContent = "Error: " + e.message;
+  }
+}
+load();
+setInterval(load, 16000);
+</script>
+</body>
+</html>
