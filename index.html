@@ -99,6 +99,7 @@
   .legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
   .big{font-size:30px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
   .big em{font-style:normal;font-size:13px;color:var(--mute);font-weight:500;margin-left:4px}
+  .sub{font-size:12px;color:var(--mute);margin:-6px 0 10px}
 
   /* calibration */
   .cal{display:flex;flex-direction:column;gap:16px;margin-top:6px}
@@ -196,7 +197,7 @@
 
         <div class="side">
           <div class="chip"><div class="ico"><svg viewBox="0 0 24 24"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></svg></div>
-            <div><small>Sink value</small><div class="v"><span id="distV">--</span><em>mm</em></div></div></div>
+            <div><small id="sinkLbl">Sink</small><div class="v"><span id="distV">--</span><em>%</em></div></div></div>
           <div class="chip"><div class="ico"><svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
             <div><small>Calibration</small><div class="v"><span id="calV">--</span></div></div></div>
         </div>
@@ -207,8 +208,8 @@
       <div class="ch"><div><div class="eyebrow">Status</div><h2>Overview</h2></div><span class="badge off" id="badge">Waiting</span></div>
       <div class="rw"><span>Temperature</span><span id="ovT">--</span></div>
       <div class="rw"><span>Humidity</span><span id="ovH">--</span></div>
-      <div class="rw"><span>Sink value</span><span id="ovD">--</span></div>
-      <div class="rw"><span>IMU.x / IMU.y</span><span id="ovI">--</span></div>
+      <div class="rw"><span>Sink</span><span id="ovD">--</span></div>
+      <div class="rw"><span>Tilt X / Tilt Y</span><span id="ovI">--</span></div>
       <div class="rw"><span>Acc.x / Acc.y</span><span id="ovA">--</span></div>
       <div class="rw"><span>Entry ID</span><span id="ovE">--</span></div>
       <div class="btns">
@@ -241,9 +242,9 @@
 
   <div class="row r3">
     <section class="card">
-      <div class="ch"><div><div class="eyebrow">Motion</div><h2>IMU and acceleration</h2></div></div>
+      <div class="ch"><div><div class="eyebrow">Motion</div><h2>Tilt and acceleration</h2></div></div>
       <div class="legend" style="margin-bottom:10px">
-        <span><i style="background:#6366f1"></i>IMU.x</span><span><i style="background:#38bdf8"></i>IMU.y</span>
+        <span><i style="background:#6366f1"></i>Tilt X (deg)</span><span><i style="background:#38bdf8"></i>Tilt Y (deg)</span>
         <span><i style="background:#14b8a6"></i>Acc.x</span><span><i style="background:#f59e0b"></i>Acc.y</span>
       </div>
       <div class="chartbox" style="height:200px"><canvas id="c2"></canvas></div>
@@ -252,15 +253,16 @@
     <section class="card">
       <div class="ch"><div><div class="eyebrow">Orientation</div><h2>Tilt</h2></div></div>
       <div class="level"><div class="bubble" id="bubble"></div></div>
-      <div class="tiltTxt" id="tiltTxt">x -- / y --</div>
+      <div class="tiltTxt" id="tiltTxt">Tilt X -- | Y --</div>
     </section>
 
     <section class="card">
       <div class="ch">
-        <div><div class="eyebrow">Distance</div><h2>Sink value</h2></div>
-        <div class="big"><span id="distBig">--</span><em>mm</em></div>
+        <div><div class="eyebrow">Settlement</div><h2>Sink</h2></div>
+        <div class="big"><span id="distBig">--</span><em>%</em></div>
       </div>
-      <div class="chartbox" style="height:200px"><canvas id="c3"></canvas></div>
+      <div class="sub" id="sinkSub">Above 0 means sinking, below 0 means rising.</div>
+      <div class="chartbox" style="height:180px"><canvas id="c3"></canvas></div>
     </section>
   </div>
 
@@ -272,6 +274,9 @@ const $ = id => document.getElementById(id);
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const fmt = (v, d) => (v == null || isNaN(v)) ? "--" : Number(v).toFixed(d);
 const DIRS = ["North","Northeast","East","Southeast","South","Southwest","West","Northwest"];
+
+const SINK_DEADBAND = 0.05;     // % under which the building counts as stable (matches the firmware)
+const BUBBLE_PX_PER_DEG = 20;   // tilt bubble travel, full range is about +/- 3 degrees
 
 let N = 60, feeds = [], curAngle = 0;
 
@@ -336,10 +341,12 @@ const c1 = mk("c1",
    { label: "Humidity (%)", color: "#3b82f6", fill: true, axis: "y1" }],
   { y: axis("left", true), y1: axis("right", false) });
 const c2 = mk("c2",
-  [{ label: "IMU.x", color: "#6366f1", axis: "y" }, { label: "IMU.y", color: "#38bdf8", axis: "y" },
+  [{ label: "Tilt X (deg)", color: "#6366f1", axis: "y" }, { label: "Tilt Y (deg)", color: "#38bdf8", axis: "y" },
    { label: "Acc.x", color: "#14b8a6", axis: "y1" }, { label: "Acc.y", color: "#f59e0b", axis: "y1" }],
   { y: axis("left", true), y1: axis("right", false) });
-const c3 = mk("c3", [{ label: "Sink value (mm)", color: "#0ea5e9", fill: true }], { y: axis("left", true) });
+const sinkAxis = axis("left", true);
+sinkAxis.ticks.callback = v => v + "%";
+const c3 = mk("c3", [{ label: "Sink (%)", color: "#0ea5e9", fill: true }], { y: sinkAxis });
 
 function fill(chart, labels, list, fields) {
   chart.data.labels = labels;
@@ -363,6 +370,12 @@ function setPill(live, text) {
   $("badge").textContent = live ? "Live" : "Offline";
 }
 const clamp = (v, m) => Math.max(-m, Math.min(m, v));
+function sinkState(p) {
+  if (p == null) return "";
+  if (p > SINK_DEADBAND) return "sinking";
+  if (p < -SINK_DEADBAND) return "rising";
+  return "stable";
+}
 
 /* main loop */
 async function load() {
@@ -373,13 +386,18 @@ async function load() {
     feeds = d.feeds;
     const L = feeds[feeds.length - 1];
     const v = k => L["field" + k] == null ? null : Number(L["field" + k]);
-    const t = v(1), h = v(2), dist = v(3), ix = v(4), iy = v(5), hd = v(6), ax = v(7), ay = v(8);
+    // field3 = sink % (positive = sinking), field4/5 = tilt X/Y in degrees
+    const t = v(1), h = v(2), sink = v(3), ix = v(4), iy = v(5), hd = v(6), ax = v(7), ay = v(8);
 
     $("tempV").textContent = fmt(t, 1);
     $("humV").textContent = fmt(h, 1);
-    $("distV").textContent = dist == null ? "--" : fmt(dist, 0);
     $("deg").textContent = fmt(hd, 0);
     setDial(hd);
+
+    const st = sinkState(sink);
+    $("distV").textContent = sink == null ? "--" : fmt(Math.abs(sink), 2);
+    $("distBig").textContent = sink == null ? "--" : fmt(Math.abs(sink), 2);
+    $("sinkLbl").textContent = st ? "Building is " + st : "Sink";
 
     const parts = (L.status || "").split(" CAL ");
     const dir = parts[0] || (hd != null ? DIRS[Math.round(hd / 45) % 8] : "");
@@ -394,15 +412,14 @@ async function load() {
 
     $("ovT").textContent = fmt(t, 1) + " C";
     $("ovH").textContent = fmt(h, 1) + " %";
-    $("ovD").textContent = dist == null ? "Out of range" : fmt(dist, 0) + " mm";
-    $("ovI").textContent = fmt(ix, 1) + " / " + fmt(iy, 1);
+    $("ovD").textContent = sink == null ? "N/A" : fmt(Math.abs(sink), 2) + " % " + st;
+    $("ovI").textContent = fmt(ix, 2) + "\u00b0 / " + fmt(iy, 2) + "\u00b0";
     $("ovA").textContent = fmt(ax, 2) + " / " + fmt(ay, 2);
     $("ovE").textContent = L.entry_id;
-    $("distBig").textContent = dist == null ? "--" : fmt(dist, 0);
 
     if (ix != null && iy != null) {
-      $("bubble").style.transform = "translate(" + clamp(iy * 4, 62) + "px," + clamp(ix * 4, 62) + "px)";
-      $("tiltTxt").textContent = "x " + fmt(ix, 1) + "\u00b0  /  y " + fmt(iy, 1) + "\u00b0";
+      $("bubble").style.transform = "translate(" + clamp(iy * BUBBLE_PX_PER_DEG, 62) + "px," + clamp(ix * BUBBLE_PX_PER_DEG, 62) + "px)";
+      $("tiltTxt").textContent = "Tilt X " + fmt(ix, 2) + "\u00b0  |  Y " + fmt(iy, 2) + "\u00b0";
     }
 
     const when = new Date(L.created_at);
@@ -432,7 +449,7 @@ $("range").addEventListener("click", e => {
 });
 $("csv").addEventListener("click", () => {
   if (!feeds.length) return;
-  const rows = [["time","entry_id","temperature_c","humidity_pct","sink_value_mm","imu_x","imu_y","compass_deg","acc_x","acc_y","status"]];
+  const rows = [["time","entry_id","temperature_c","humidity_pct","sink_pct","tilt_x_deg","tilt_y_deg","compass_deg","acc_x","acc_y","status"]];
   feeds.forEach(x => rows.push([x.created_at, x.entry_id, x.field1, x.field2, x.field3, x.field4, x.field5, x.field6, x.field7, x.field8, x.status || ""]
     .map(c => c == null ? "" : '"' + String(c).replace(/"/g, '""') + '"')));
   const blob = new Blob([rows.map(r => r.join(",")).join("\n")], { type: "text/csv" });
